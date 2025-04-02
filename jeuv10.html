@@ -1,0 +1,899 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GitHub Asteroids - Version Simplifiée</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+            background-color: #0d1117;
+            color: #c9d1d9;
+            overflow: hidden;
+        }
+        canvas {
+            display: block;
+            background-color: #000;
+        }
+        #gameContainer {
+            display: flex;
+            height: 100vh;
+        }
+        #canvasContainer {
+            flex: 3;
+        }
+        #sidebar {
+            flex: 1;
+            padding: 20px;
+            background-color: #161b22;
+            overflow-y: auto;
+            box-shadow: -2px 0 10px rgba(0, 0, 0, 0.5);
+        }
+        .event-card {
+            background-color: #21262d;
+            border-radius: 6px;
+            padding: 12px;
+            margin-bottom: 15px;
+            border: 1px solid #30363d;
+        }
+        .event-card h3 {
+            margin-top: 0;
+            font-size: 16px;
+            color: #58a6ff;
+        }
+        .event-card p {
+            margin: 8px 0;
+            font-size: 14px;
+        }
+        .addition {
+            color: #3fb950;
+        }
+        .deletion {
+            color: #f85149;
+        }
+        #gameStatus {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: white;
+            font-size: 18px;
+            z-index: 100;
+        }
+        #controlsInfo {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            color: white;
+            font-size: 14px;
+            z-index: 100;
+        }
+        #pauseScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 200;
+            display: none;
+        }
+        #pauseScreen h2 {
+            color: white;
+            font-size: 32px;
+            margin-bottom: 20px;
+        }
+        #pauseScreen p {
+            color: #c9d1d9;
+            font-size: 18px;
+            margin-bottom: 30px;
+            max-width: 600px;
+            text-align: center;
+        }
+        #pauseScreen button {
+            background-color: #238636;
+            border: none;
+            border-radius: 4px;
+            color: white;
+            padding: 12px 24px;
+            font-size: 16px;
+            cursor: pointer;
+            margin: 0 10px;
+        }
+        #pauseScreen button:hover {
+            background-color: #2ea043;
+        }
+        #gameOverScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 200;
+            display: none;
+        }
+        #gameOverScreen h2 {
+            color: #f85149;
+            font-size: 36px;
+            margin-bottom: 20px;
+        }
+        #gameOverScreen p {
+            color: #c9d1d9;
+            font-size: 18px;
+            margin-bottom: 30px;
+        }
+        #gameOverScreen button {
+            background-color: #238636;
+            border: none;
+            border-radius: 4px;
+            color: white;
+            padding: 12px 24px;
+            font-size: 16px;
+            cursor: pointer;
+        }
+        #gameOverScreen button:hover {
+            background-color: #2ea043;
+        }
+        #difficultySelector {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            z-index: 100;
+            background-color: rgba(13, 17, 23, 0.7);
+            padding: 10px;
+            border-radius: 6px;
+        }
+        #difficultySelector select {
+            background-color: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 4px;
+            color: #c9d1d9;
+            padding: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <div id="canvasContainer">
+            <canvas id="gameCanvas"></canvas>
+        </div>
+        <div id="sidebar">
+            <h2>Événements récents</h2>
+            <div id="events"></div>
+        </div>
+    </div>
+
+    <div id="gameStatus">
+        Score: <span id="score">0</span> | Vies: <span id="lives">3</span>
+    </div>
+
+    <div id="controlsInfo">
+        ← → pour tourner | ↑ pour avancer | Espace pour tirer | P pour pause
+    </div>
+
+    <div id="difficultySelector">
+        <select id="difficultyLevel">
+            <option value="easy">Facile</option>
+            <option value="medium" selected>Moyen</option>
+            <option value="hard">Difficile</option>
+        </select>
+    </div>
+
+    <div id="pauseScreen">
+        <h2>Jeu en Pause</h2>
+        <p>GitHub Asteroids est un jeu de tir spatial inspiré par GitHub. Détruisez les astéroïdes pour gagner des points!</p>
+        <div>
+            <button id="resumeButton">Reprendre le Jeu</button>
+        </div>
+    </div>
+
+    <div id="gameOverScreen">
+        <h2>Game Over</h2>
+        <p>Votre score: <span id="finalScore">0</span></p>
+        <button id="restartButton">Jouer à nouveau</button>
+    </div>
+
+    <script>
+        // Constantes du jeu
+        const ROTATION_SPEED = 5;
+        const THRUST = 0.2;
+        const FRICTION = 0.98;
+        const BULLET_SPEED = 10;
+        const MAX_BULLETS = 5;
+        const MAX_ASTEROIDS = 15;
+        const RESPAWN_INVULNERABILITY = 3000; // 3 secondes
+        const DEBUG = true; // Activer pour les logs de débogage
+
+        // Types d'événements simulés
+        const EVENT_TYPES = [
+            { type: "Commit", color: "#3fb950", size: 30, icon: "↑" },
+            { type: "Issue", color: "#f85149", size: 40, icon: "!" },
+            { type: "Pull Request", color: "#58a6ff", size: 50, icon: "←" },
+            { type: "Branch", color: "#8957e5", size: 35, icon: "+" },
+            { type: "Release", color: "#ffdf5d", size: 45, icon: "★" }
+        ];
+
+        // Noms simulés pour les événements
+        const FAKE_NAMES = [
+            "johndoe", "janedoe", "gituser", "developer", "coder", 
+            "pythonista", "javascripter", "webdev", "frontenddev", "backenddev",
+            "fullstack", "devops", "sysadmin", "designer", "tester"
+        ];
+
+        // Faux noms de projets
+        const FAKE_PROJECTS = [
+            "awesome-project", "web-app", "api-service", "data-analyzer",
+            "ui-toolkit", "dev-tools", "backend-service", "mobile-app",
+            "game-engine", "ml-framework", "docs-site", "utility-lib",
+            "database-connector", "auth-service", "analytics-dashboard"
+        ];
+
+        // État du jeu
+        let canvas, ctx;
+        let ship = {};
+        let bullets = [];
+        let asteroids = [];
+        let powerups = [];
+        let score = 0;
+        let lives = 3;
+        let keys = {};
+        let gameOver = false;
+        let paused = false;
+        let respawnTime = 0;
+        let invulnerable = false;
+        let lastAsteroidTime = 0;
+        let difficulty = "medium";
+        let asteroidSpawnInterval = 2000; // 2 secondes par défaut (moyen)
+
+        // Fonction de débogage
+        function debug(message) {
+            if (DEBUG && window.console && console.log) {
+                console.log(message);
+            }
+        }
+        
+        // Initialisation du jeu
+        function init() {
+            // Configuration du canvas
+            canvas = document.getElementById('gameCanvas');
+            ctx = canvas.getContext('2d');
+            resizeCanvas();
+            window.addEventListener('resize', resizeCanvas);
+
+            // Initialisation du vaisseau
+            resetShip();
+
+            // Configuration des contrôles
+            window.addEventListener('keydown', (e) => { keys[e.key] = true; });
+            window.addEventListener('keyup', (e) => { keys[e.key] = false; });
+            window.addEventListener('keydown', handleKeyDown);
+
+            // Configuration de l'UI
+            document.getElementById('resumeButton').addEventListener('click', togglePause);
+            document.getElementById('restartButton').addEventListener('click', restartGame);
+            document.getElementById('difficultyLevel').addEventListener('change', changeDifficulty);
+
+            // Définir la difficulté initiale
+            difficulty = document.getElementById('difficultyLevel').value;
+            updateDifficulty();
+
+            // Commencer la boucle de jeu
+            requestAnimationFrame(gameLoop);
+
+            // Afficher l'écran de pause avec les instructions
+            togglePause();
+        }
+
+        function resizeCanvas() {
+            canvas.width = document.getElementById('canvasContainer').clientWidth;
+            canvas.height = window.innerHeight;
+        }
+
+        function resetShip() {
+            ship = {
+                x: canvas.width / 2,
+                y: canvas.height / 2,
+                radius: 15,
+                angle: 0,
+                velocityX: 0,
+                velocityY: 0,
+                thrusting: false,
+                visible: true
+            };
+        }
+
+        function handleKeyDown(e) {
+            // Pause/reprise avec la touche 'p'
+            if (e.key === 'p' || e.key === 'P') {
+                togglePause();
+            }
+        }
+
+        function togglePause() {
+            paused = !paused;
+            document.getElementById('pauseScreen').style.display = paused ? 'flex' : 'none';
+            if (!paused) {
+                requestAnimationFrame(gameLoop);
+            }
+        }
+
+        function restartGame() {
+            score = 0;
+            lives = 3;
+            gameOver = false;
+            asteroids = [];
+            bullets = [];
+            powerups = [];
+            document.getElementById('gameOverScreen').style.display = 'none';
+            document.getElementById('score').textContent = score;
+            document.getElementById('lives').textContent = lives;
+            resetShip();
+            requestAnimationFrame(gameLoop);
+        }
+
+        function changeDifficulty() {
+            difficulty = document.getElementById('difficultyLevel').value;
+            updateDifficulty();
+        }
+
+        function updateDifficulty() {
+            switch (difficulty) {
+                case "easy":
+                    asteroidSpawnInterval = 3000; // 3 secondes
+                    break;
+                case "medium":
+                    asteroidSpawnInterval = 2000; // 2 secondes
+                    break;
+                case "hard":
+                    asteroidSpawnInterval = 1000; // 1 seconde
+                    break;
+            }
+        }
+
+        // Fonctions pour générer des données aléatoires
+        function getRandomEventType() {
+            return EVENT_TYPES[Math.floor(Math.random() * EVENT_TYPES.length)];
+        }
+
+        function getRandomName() {
+            return FAKE_NAMES[Math.floor(Math.random() * FAKE_NAMES.length)];
+        }
+
+        function getRandomProject() {
+            return FAKE_PROJECTS[Math.floor(Math.random() * FAKE_PROJECTS.length)];
+        }
+
+        function createRandomEvent() {
+            const eventType = getRandomEventType();
+            const user = getRandomName();
+            const project = getRandomProject();
+            
+            let details = "";
+            switch (eventType.type) {
+                case "Commit":
+                    details = `Mise à jour de ${Math.floor(Math.random() * 5) + 1} fichiers`;
+                    break;
+                case "Issue":
+                    details = `Bug #${Math.floor(Math.random() * 100) + 1}: Problème de ${Math.random() < 0.5 ? "performance" : "affichage"}`;
+                    break;
+                case "Pull Request":
+                    details = `PR #${Math.floor(Math.random() * 50) + 1}: Ajout de fonctionnalité`;
+                    break;
+                case "Branch":
+                    details = `Nouvelle branche: feature-${Math.floor(Math.random() * 100)}`;
+                    break;
+                case "Release":
+                    details = `Version ${Math.floor(Math.random() * 5) + 1}.${Math.floor(Math.random() * 10)}.${Math.floor(Math.random() * 10)}`;
+                    break;
+            }
+            
+            return {
+                type: eventType.type,
+                user: user,
+                project: project,
+                details: details,
+                time: new Date().toLocaleTimeString()
+            };
+        }
+
+        function createAsteroidFromEvent(event) {
+            // Trouver la configuration pour ce type d'événement
+            const eventConfig = EVENT_TYPES.find(config => config.type === event.type) || EVENT_TYPES[0];
+            
+            // Créer l'astéroïde à une position aléatoire sur le bord de l'écran
+            let x, y;
+            if (Math.random() < 0.5) {
+                // Spawn sur le bord gauche ou droit
+                x = Math.random() < 0.5 ? 0 : canvas.width;
+                y = Math.random() * canvas.height;
+            } else {
+                // Spawn sur le bord supérieur ou inférieur
+                x = Math.random() * canvas.width;
+                y = Math.random() < 0.5 ? 0 : canvas.height;
+            }
+
+            // Calculer la vélocité vers le centre avec un peu d'aléatoire
+            const angle = Math.atan2(canvas.height / 2 - y, canvas.width / 2 - x) + 
+                        (Math.random() - 0.5) * Math.PI / 2;
+            const speed = 1 + Math.random() * 2;
+            
+            // Simplification: réduire les points de vie pour faciliter la destruction
+            const size = eventConfig.size;
+            const hp = Math.max(1, Math.ceil(size / 15)); // HP réduit pour faciliter la destruction
+            
+            debug("Création d'un astéroïde: type=" + event.type + ", taille=" + size + ", HP=" + hp);
+
+            asteroids.push({
+                x,
+                y,
+                radius: size,
+                velocityX: Math.cos(angle) * speed,
+                velocityY: Math.sin(angle) * speed,
+                color: eventConfig.color,
+                event: event,
+                icon: eventConfig.icon,
+                hp: hp
+            });
+        }
+
+        function createRandomPowerup() {
+            const types = ["extraLife", "shield", "rapidFire"];
+            const type = types[Math.floor(Math.random() * types.length)];
+            
+            let color;
+            switch (type) {
+                case "extraLife": color = "#3fb950"; break; // Vert
+                case "shield": color = "#58a6ff"; break;    // Bleu
+                case "rapidFire": color = "#ffdf5d"; break; // Jaune
+            }
+            
+            // Position aléatoire
+            const x = Math.random() * (canvas.width - 100) + 50;
+            const y = Math.random() * (canvas.height - 100) + 50;
+
+            powerups.push({
+                x,
+                y,
+                radius: 15,
+                type,
+                color,
+                velocityX: (Math.random() - 0.5) * 2,
+                velocityY: (Math.random() - 0.5) * 2,
+                duration: 10000, // 10 secondes
+                blinkRate: 100,
+                visible: true,
+                collected: false,
+                createdAt: Date.now()
+            });
+        }
+
+        function displayEvent(event) {
+            const eventsContainer = document.getElementById('events');
+            
+            // Créer la carte d'événement
+            const card = document.createElement('div');
+            card.className = 'event-card';
+            
+            // Formater les infos d'événement
+            card.innerHTML = `
+                <h3>${event.user} a fait un ${event.type}</h3>
+                <p>${event.details}</p>
+                <p>Projet: ${event.project}</p>
+                <p>Heure: ${event.time}</p>
+            `;
+            
+            // Ajouter à la liste des événements (au début)
+            eventsContainer.insertBefore(card, eventsContainer.firstChild);
+            
+            // Limiter le nombre d'événements affichés
+            if (eventsContainer.childNodes.length > 10) {
+                eventsContainer.removeChild(eventsContainer.lastChild);
+            }
+        }
+
+        // Boucle de jeu
+        function gameLoop(timestamp) {
+            if (paused || gameOver) return;
+            
+            update(timestamp);
+            render();
+            
+            requestAnimationFrame(gameLoop);
+        }
+
+        function update(timestamp) {
+            // Création d'astéroïdes basée sur l'intervalle
+            if (!lastAsteroidTime) lastAsteroidTime = timestamp;
+            
+            if (timestamp - lastAsteroidTime > asteroidSpawnInterval && asteroids.length < MAX_ASTEROIDS) {
+                const event = createRandomEvent();
+                createAsteroidFromEvent(event);
+                lastAsteroidTime = timestamp;
+                
+                // 5% de chance de créer un power-up
+                if (Math.random() < 0.05) {
+                    createRandomPowerup();
+                }
+            }
+            
+            // Mettre à jour le vaisseau
+            if (ship.visible) {
+                // Rotation
+                if (keys['ArrowLeft'] || keys['a'] || keys['A']) {
+                    ship.angle -= ROTATION_SPEED * Math.PI / 180;
+                }
+                if (keys['ArrowRight'] || keys['d'] || keys['D']) {
+                    ship.angle += ROTATION_SPEED * Math.PI / 180;
+                }
+                
+                // Propulsion
+                ship.thrusting = keys['ArrowUp'] || keys['w'] || keys['W'];
+                if (ship.thrusting) {
+                    ship.velocityX += THRUST * Math.cos(ship.angle);
+                    ship.velocityY += THRUST * Math.sin(ship.angle);
+                }
+                
+                // Appliquer la friction
+                ship.velocityX *= FRICTION;
+                ship.velocityY *= FRICTION;
+                
+                // Mettre à jour la position
+                ship.x += ship.velocityX;
+                ship.y += ship.velocityY;
+                
+                // Envelopper l'écran
+                if (ship.x < 0) ship.x = canvas.width;
+                if (ship.x > canvas.width) ship.x = 0;
+                if (ship.y < 0) ship.y = canvas.height;
+                if (ship.y > canvas.height) ship.y = 0;
+                
+                // Tirer
+                if ((keys[' '] || keys['Space']) && bullets.length < MAX_BULLETS) {
+                    const bulletSpeed = ship.rapidFire ? BULLET_SPEED * 1.5 : BULLET_SPEED;
+                    bullets.push({
+                        x: ship.x + ship.radius * Math.cos(ship.angle),
+                        y: ship.y + ship.radius * Math.sin(ship.angle),
+                        velocityX: bulletSpeed * Math.cos(ship.angle),
+                        velocityY: bulletSpeed * Math.sin(ship.angle),
+                        radius: 5, // Augmenté pour une meilleure détection de collision
+                        lifespan: 50 // frames
+                    });
+                    
+                    debug("Tir d'une balle: position (" + ship.x + "," + ship.y + "), angle: " + ship.angle);
+                    
+                    // Supprimer la touche pour éviter un tir continu
+                    keys[' '] = false;
+                    keys['Space'] = false;
+                }
+            } else if (Date.now() > respawnTime) {
+                // Réapparition du vaisseau
+                resetShip();
+                invulnerable = true;
+                setTimeout(() => {
+                    invulnerable = false;
+                }, RESPAWN_INVULNERABILITY);
+            }
+            
+            // Mettre à jour les balles
+            for (let i = bullets.length - 1; i >= 0; i--) {
+                bullets[i].x += bullets[i].velocityX;
+                bullets[i].y += bullets[i].velocityY;
+                
+                // Envelopper l'écran
+                if (bullets[i].x < 0) bullets[i].x = canvas.width;
+                if (bullets[i].x > canvas.width) bullets[i].x = 0;
+                if (bullets[i].y < 0) bullets[i].y = canvas.height;
+                if (bullets[i].y > canvas.height) bullets[i].y = 0;
+                
+                // Diminuer la durée de vie
+                bullets[i].lifespan--;
+                
+                // Supprimer les balles expirées
+                if (bullets[i].lifespan <= 0) {
+                    bullets.splice(i, 1);
+                }
+            }
+            
+            // Mettre à jour les astéroïdes
+            for (let i = asteroids.length - 1; i >= 0; i--) {
+                asteroids[i].x += asteroids[i].velocityX;
+                asteroids[i].y += asteroids[i].velocityY;
+                
+                // Envelopper l'écran
+                if (asteroids[i].x < 0 - asteroids[i].radius) asteroids[i].x = canvas.width + asteroids[i].radius;
+                if (asteroids[i].x > canvas.width + asteroids[i].radius) asteroids[i].x = 0 - asteroids[i].radius;
+                if (asteroids[i].y < 0 - asteroids[i].radius) asteroids[i].y = canvas.height + asteroids[i].radius;
+                if (asteroids[i].y > canvas.height + asteroids[i].radius) asteroids[i].y = 0 - asteroids[i].radius;
+            }
+            
+            // Mettre à jour les power-ups
+            const currentTime = Date.now();
+            for (let i = powerups.length - 1; i >= 0; i--) {
+                const powerup = powerups[i];
+                
+                // Déplacer le power-up
+                powerup.x += powerup.velocityX;
+                powerup.y += powerup.velocityY;
+                
+                // Envelopper l'écran
+                if (powerup.x < 0) powerup.x = canvas.width;
+                if (powerup.x > canvas.width) powerup.x = 0;
+                if (powerup.y < 0) powerup.y = canvas.height;
+                if (powerup.y > canvas.height) powerup.y = 0;
+                
+                // Effet de clignotement quand il va expirer
+                if (currentTime - powerup.createdAt > powerup.duration - 3000) {
+                    if (currentTime % powerup.blinkRate < powerup.blinkRate / 2) {
+                        powerup.visible = true;
+                    } else {
+                        powerup.visible = false;
+                    }
+                }
+                
+                // Supprimer les power-ups expirés
+                if (currentTime - powerup.createdAt > powerup.duration) {
+                    powerups.splice(i, 1);
+                }
+            }
+            
+            // Vérifier les collisions balle-astéroïde
+            for (let i = bullets.length - 1; i >= 0; i--) {
+                let bulletHit = false;
+                
+                for (let j = asteroids.length - 1; j >= 0; j--) {
+                    // Vérifier si la balle est encore active
+                    if (bulletHit) break;
+                    
+                    const dx = bullets[i].x - asteroids[j].x;
+                    const dy = bullets[i].y - asteroids[j].y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (distance < bullets[i].radius + asteroids[j].radius) {
+                        debug("Collision détectée! Balle: " + i + ", Astéroïde: " + j);
+                        debug("Distance: " + distance + ", Somme des rayons: " + (bullets[i].radius + asteroids[j].radius));
+                        debug("HP avant: " + asteroids[j].hp);
+                        
+                        // Réduire les points de vie de l'astéroïde
+                        asteroids[j].hp--;
+                        
+                        debug("HP après: " + asteroids[j].hp);
+                        
+                        // Marquer la balle comme touchée
+                        bulletHit = true;
+                        
+                        // Si les points de vie de l'astéroïde sont à 0, le détruire
+                        if (asteroids[j].hp <= 0) {
+                            debug("Astéroïde détruit! Points gagnés: " + Math.floor(asteroids[j].radius));
+                            
+                            // Afficher l'événement dans la barre latérale
+                            displayEvent(asteroids[j].event);
+                            
+                            // Ajouter des points basés sur la taille
+                            score += Math.floor(asteroids[j].radius);
+                            document.getElementById('score').textContent = score;
+                            
+                            // Supprimer l'astéroïde
+                            asteroids.splice(j, 1);
+                        }
+                    }
+                }
+                
+                // Supprimer la balle si elle a touché quelque chose
+                if (bulletHit) {
+                    bullets.splice(i, 1);
+                }
+            }
+            
+            // Vérifier les collisions vaisseau-astéroïde
+            if (ship.visible && !invulnerable) {
+                for (let i = asteroids.length - 1; i >= 0; i--) {
+                    const dx = ship.x - asteroids[i].x;
+                    const dy = ship.y - asteroids[i].y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (distance < ship.radius + asteroids[i].radius) {
+                        // Vérifier si le vaisseau a un bouclier
+                        if (ship.shield) {
+                            // Supprimer l'astéroïde
+                            displayEvent(asteroids[i].event);
+                            score += Math.floor(asteroids[i].radius);
+                            document.getElementById('score').textContent = score;
+                            asteroids.splice(i, 1);
+                        } else {
+                            // Détruire le vaisseau et perdre une vie
+                            ship.visible = false;
+                            lives--;
+                            document.getElementById('lives').textContent = lives;
+                            
+                            if (lives <= 0) {
+                                gameOver = true;
+                                document.getElementById('finalScore').textContent = score;
+                                document.getElementById('gameOverScreen').style.display = 'flex';
+                            } else {
+                                respawnTime = Date.now() + 2000; // 2 secondes avant réapparition
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Vérifier les collisions vaisseau-powerup
+            if (ship.visible) {
+                for (let i = powerups.length - 1; i >= 0; i--) {
+                    if (!powerups[i].visible || powerups[i].collected) continue;
+                    
+                    const dx = ship.x - powerups[i].x;
+                    const dy = ship.y - powerups[i].y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    
+                    if (distance < ship.radius + powerups[i].radius) {
+                        // Appliquer l'effet du power-up
+                        switch (powerups[i].type) {
+                            case 'extraLife':
+                                lives++;
+                                document.getElementById('lives').textContent = lives;
+                                break;
+                            case 'shield':
+                                ship.shield = true;
+                                setTimeout(() => {
+                                    ship.shield = false;
+                                }, 7000); // 7 secondes de bouclier
+                                break;
+                            case 'rapidFire':
+                                ship.rapidFire = true;
+                                setTimeout(() => {
+                                    ship.rapidFire = false;
+                                }, 7000); // 7 secondes de tir rapide
+                                break;
+                        }
+                        
+                        // Marquer le power-up comme collecté
+                        powerups.splice(i, 1);
+                    }
+                }
+            }
+        }
+
+        function render() {
+            // Effacer le canvas
+            ctx.fillStyle = 'black';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Dessiner le vaisseau
+            if (ship.visible) {
+                ctx.save();
+                ctx.translate(ship.x, ship.y);
+                ctx.rotate(ship.angle);
+                
+                // Dessiner le corps du vaisseau - rempli plutôt que contour
+                ctx.fillStyle = invulnerable ? 
+                    `rgba(255, 255, 255, ${Math.sin(Date.now() / 100) * 0.5 + 0.5})` : 
+                    'white';
+                ctx.beginPath();
+                ctx.moveTo(ship.radius, 0);
+                ctx.lineTo(-ship.radius / 2, -ship.radius / 2);
+                ctx.lineTo(-ship.radius / 4, 0);
+                ctx.lineTo(-ship.radius / 2, ship.radius / 2);
+                ctx.closePath();
+                ctx.fill();
+                
+                // Dessiner le bouclier si actif
+                if (ship.shield) {
+                    ctx.strokeStyle = `rgba(88, 166, 255, ${Math.sin(Date.now() / 100) * 0.3 + 0.7})`;
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.arc(0, 0, ship.radius + 5, 0, Math.PI * 2);
+                    ctx.stroke();
+                }
+                
+                // Dessiner la flamme du propulseur si en mouvement
+                if (ship.thrusting) {
+                    ctx.strokeStyle = 'orange';
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    ctx.moveTo(-ship.radius / 4, 0);
+                    ctx.lineTo(-ship.radius - Math.random() * 5, 0);
+                    ctx.stroke();
+                }
+                
+                ctx.restore();
+            }
+            
+            // Dessiner les balles
+            ctx.fillStyle = 'white';
+            bullets.forEach(bullet => {
+                ctx.beginPath();
+                ctx.arc(bullet.x, bullet.y, bullet.radius, 0, Math.PI * 2);
+                ctx.fill();
+            });
+            
+            // Dessiner les astéroïdes
+            asteroids.forEach(asteroid => {
+                ctx.save();
+                ctx.translate(asteroid.x, asteroid.y);
+                
+                // Dessiner l'astéroïde
+                ctx.fillStyle = asteroid.color;  // Utiliser la couleur comme remplissage
+                ctx.strokeStyle = 'white';      // Bordure blanche
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                
+                // Créer un polygone irrégulier pour l'astéroïde
+                const numVertices = Math.floor(asteroid.radius / 5);
+                for (let i = 0; i < numVertices; i++) {
+                    const angle = (i / numVertices) * Math.PI * 2;
+                    const jitter = asteroid.radius * 0.2;
+                    const radius = asteroid.radius + (Math.random() * jitter - jitter / 2);
+                    
+                    if (i === 0) {
+                        ctx.moveTo(radius * Math.cos(angle), radius * Math.sin(angle));
+                    } else {
+                        ctx.lineTo(radius * Math.cos(angle), radius * Math.sin(angle));
+                    }
+                }
+                
+                ctx.closePath();
+                ctx.fill();   // Remplir la forme
+                ctx.stroke(); // Ajouter un contour
+                
+                // Dessiner l'icône basée sur le type d'événement
+                ctx.fillStyle = 'white';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.font = `${asteroid.radius / 2}px sans-serif`;
+                ctx.fillText(asteroid.icon, 0, 0);
+                
+                ctx.restore();
+            });
+            
+            // Dessiner les power-ups
+            powerups.forEach(powerup => {
+                if (!powerup.visible) return;
+                
+                ctx.save();
+                ctx.translate(powerup.x, powerup.y);
+                
+                // Dessiner le power-up avec remplissage
+                ctx.fillStyle = powerup.color;
+                ctx.strokeStyle = 'white';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.arc(0, 0, powerup.radius, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+                
+                // Dessiner l'icône basée sur le type de power-up
+                ctx.fillStyle = 'white';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.font = `${powerup.radius}px sans-serif`;
+                
+                let icon = '';
+                switch (powerup.type) {
+                    case 'extraLife': icon = '♥'; break;
+                    case 'shield': icon = '◯'; break;
+                    case 'rapidFire': icon = '↯'; break;
+                    default: icon = '?';
+                }
+                
+                ctx.fillText(icon, 0, 0);
+                
+                ctx.restore();
+            });
+        }
+
+        // Démarrer le jeu quand la page se charge
+        window.onload = init;
+    </script>
+</body>
+</html>
